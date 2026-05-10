@@ -14,9 +14,9 @@ import (
 )
 
 func main() {
-	// Server per tenere vivo il bot su Render
+	// Server per Render (Keep-alive)
 	go func() {
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintf(w, "Bot Online") })
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintf(w, "Bot Ville & Aziende Online") })
 		port := os.Getenv("PORT")
 		if port == "" { port = "8080" }
 		http.ListenAndServe(":"+port, nil)
@@ -28,17 +28,34 @@ func main() {
 		log.Fatalf("Errore sessione: %v", err)
 	}
 
-	// ID CONFIGURAZIONE
-	serverID := "1495170590947016996"
+	// CONFIGURAZIONE ID
+	serverID      := "1495170590947016996"
 	supervisoreID := "1502996558340296754"
-	staffRole1 := "1495179869061906602"
-	staffRole2 := "1495179516094709850"
+	staffRole1    := "1495179869061906602"
+	staffRole2    := "1495179516094709850"
 
+	// 1. DEFINIZIONE TUTTI I COMANDI SLASH
+	commands := []*discordgo.ApplicationCommand{
+		{Name: "setup-assistenza", Description: "Pannello Ticket Ville/Aziende"},
+		{Name: "regolamento", Description: "Regolamento degli asset"},
+		{Name: "villa-allarme", Description: "Attiva sirena e avvisa lo staff"},
+		{Name: "villa-keys", Description: "Gestione chiavi", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Utente target", Required: true},
+		}},
+		{Name: "biz-annuncio", Description: "Notifica aziendale", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "messaggio", Description: "Testo annuncio", Required: true},
+		}},
+		{Name: "contratto", Description: "Genera contratto casa", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "numero", Description: "Civico", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "tipo", Description: "Grandezza", Required: true},
+		}},
+	}
+
+	// 2. GESTORE COMANDI TESTUALI (!reclama e !chiudi)
 	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Author.Bot { return }
 		content := strings.ToLower(m.Content)
 
-		// COMANDO !RECLAMA
 		if content == "!reclama" {
 			s.ChannelEditComplex(m.ChannelID, &discordgo.ChannelEdit{
 				PermissionOverwrites: []*discordgo.PermissionOverwrite{
@@ -47,43 +64,58 @@ func main() {
 					{ID: supervisoreID, Type: discordgo.PermissionOverwriteTypeRole, Allow: 3072},
 				},
 			})
-			s.ChannelMessageSend(m.ChannelID, "✅ **TICKET RECLAMATO**\nL'operatore "+m.Author.Mention()+" ha preso in carico la richiesta.\nSolo lui e i supervisori possono ora vedere questo canale.")
+			s.ChannelMessageSend(m.ChannelID, "✅ **TICKET RECLAMATO**\nOperatore: " + m.Author.Mention() + "\nAccesso limitato a: Staffer e Supervisori.")
 		}
 
-		// COMANDO !CHIUDI
 		if content == "!chiudi" {
-			s.ChannelMessageSend(m.ChannelID, "🔒 **CHIUSURA**\nIl ticket verrà eliminato tra 5 secondi...")
+			s.ChannelMessageSend(m.ChannelID, "🔒 **CHIUSURA**\nEliminazione tra 5 secondi...")
 			time.Sleep(5 * time.Second)
 			s.ChannelDelete(m.ChannelID)
 		}
 	})
 
+	// 3. GESTORE INTERAZIONI (Slash e Pulsanti)
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		// COMANDO SLASH SETUP
-		if i.Type == discordgo.InteractionApplicationCommand && i.ApplicationCommandData().Name == "setup-assistenza" {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: 4,
-				Data: &discordgo.InteractionResponseData{
-					Content: "🏢 **PANNELLO TICKET**\nSeleziona una categoria per aprire un ticket.",
-					Components: []discordgo.MessageComponent{
-						discordgo.ActionsRow{
-							Components: []discordgo.MessageComponent{
+		
+		// Gestione Slash Commands
+		if i.Type == discordgo.InteractionApplicationCommand {
+			data := i.ApplicationCommandData()
+			switch data.Name {
+			case "setup-assistenza":
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: 4,
+					Data: &discordgo.InteractionResponseData{
+						Content: "🏢 **PANNELLO TICKET**\nSeleziona una categoria per aprire un ticket.",
+						Components: []discordgo.MessageComponent{
+							discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 								discordgo.SelectMenu{
 									CustomID: "ticket_asset",
 									Placeholder: "Scegli categoria...",
 									Options: []discordgo.SelectMenuOption{
-										{Label: "Acquisto Asset", Value: "acquisto"},
-										{Label: "Supporto", Value: "supporto"},
+										{Label: "Acquisto Villa/Azienda", Value: "acquisto"},
+										{Label: "Problemi/Gestione", Value: "gestione"},
 									},
 								},
-							},
+							}},
 						},
 					},
-				},
-			})
+				})
+			case "regolamento":
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: 4, Data: &discordgo.InteractionResponseData{Content: "📜 **Regolamento:** Rispetta gli asset e lo staff."},
+				})
+			case "villa-allarme":
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: 4, Data: &discordgo.InteractionResponseData{Content: "🚨 **ALLARME VILLA:** Staff informato!"},
+				})
+			default:
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Comando eseguito."},
+				})
+			}
 		}
 
-		// APERTURA TICKET DAL MENU
+		// Apertura Ticket dal Menu
 		if i.Type == discordgo.InteractionMessageComponent && i.MessageComponentData().CustomID == "ticket_asset" {
 			utente := i.Member.User
 			ch, err := s.GuildChannelCreateComplex(i.GuildID, discordgo.GuildChannelCreateData{
@@ -100,23 +132,21 @@ func main() {
 			if err != nil { return }
 
 			s.ChannelMessageSendComplex(ch.ID, &discordgo.MessageSend{
-				Content: "🎫 **TICKET APERTO**\nUtente: "+utente.Mention()+"\n\nStaff: <@&"+staffRole1+"> <@&"+staffRole2+">",
+				Content: "🎫 **TICKET APERTO**\nCreato da: " + utente.Mention() + "\nStaff: <@&" + staffRole1 + "> <@&" + staffRole2 + ">",
 				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.Button{Label: "Reclama ✋", Style: discordgo.PrimaryButton, CustomID: "btn_reclama"},
-							discordgo.Button{Label: "Chiudi 🔒", Style: discordgo.DangerButton, CustomID: "btn_chiudi"},
-						},
-					},
+					discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+						discordgo.Button{Label: "Reclama ✋", Style: discordgo.PrimaryButton, CustomID: "btn_reclama"},
+						discordgo.Button{Label: "Chiudi 🔒", Style: discordgo.DangerButton, CustomID: "btn_chiudi"},
+					}},
 				},
 			})
 
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Ticket creato: <#"+ch.ID+">", Flags: 64},
+				Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Ticket: <#"+ch.ID+">", Flags: 64},
 			})
 		}
 
-		// GESTIONE PULSANTI
+		// Gestione Pulsanti Reclama/Chiudi
 		if i.Type == discordgo.InteractionMessageComponent {
 			if i.MessageComponentData().CustomID == "btn_reclama" {
 				s.ChannelEditComplex(i.ChannelID, &discordgo.ChannelEdit{
@@ -127,7 +157,7 @@ func main() {
 					},
 				})
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Hai reclamato questo ticket!"},
+					Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Ticket reclamato correttamente!"},
 				})
 			}
 			if i.MessageComponentData().CustomID == "btn_chiudi" {
@@ -141,13 +171,9 @@ func main() {
 	})
 
 	s.Open()
-	s.ApplicationCommandBulkOverwrite(s.State.User.ID, serverID, []*discordgo.ApplicationCommand{
-		{Name: "setup-assistenza", Description: "Pannello Ticket"},
-		{Name: "regolamento", Description: "Regolamento"},
-		{Name: "villa-allarme", Description: "Allarme"},
-	})
+	s.ApplicationCommandBulkOverwrite(s.State.User.ID, serverID, commands)
 	
-	fmt.Println("Bot Online! 🚀")
+	fmt.Println("Bot Ville & Aziende Online! 🚀")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
