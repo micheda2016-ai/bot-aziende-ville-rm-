@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -13,7 +14,7 @@ import (
 func main() {
 	// Server per Render (Keep-Alive)
 	go func() {
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintf(w, "Bot ER:HC & FDO Online") })
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintf(w, "Bot Ville & Aziende Online") })
 		port := os.Getenv("PORT")
 		if port == "" { port = "8080" }
 		http.ListenAndServe(":"+port, nil)
@@ -23,46 +24,43 @@ func main() {
 	s, err := discordgo.New("Bot " + token)
 	if err != nil { log.Fatalf("Errore sessione: %v", err) }
 
-	// --- DEFINIZIONE DI TUTTI I COMANDI (FDO + VILLE + AZIENDE) ---
+	// --- DEFINIZIONE COMANDI SLASH VILLE & AZIENDE ---
 	commands := []*discordgo.ApplicationCommand{
-		// COMANDI FDO ORIGINALI
-		{Name: "chiama-fdo", Description: "Invia notifica alla Categoria FDO"},
-		{
-			Name: "arresto",
-			Description: "Registra un arresto",
-			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionUser, Name: "discord-civile", Description: "Tag Discord civile", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "roblox-civile", Description: "Nome Roblox civile", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "roblox-agente", Description: "Tuo nome Roblox", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "motivo", Description: "Motivo", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "verbale", Description: "Verbale", Required: true},
-			},
-		},
-		{
-			Name: "multa",
-			Description: "Registra una multa",
-			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionUser, Name: "discord-civile", Description: "Tag Discord civile", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "roblox-civile", Description: "Nome Roblox civile", Required: true},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "roblox-agente", Description: "Tuo nome Roblox", Required: true},
-				{Type: discordgo.ApplicationCommandOptionInteger, Name: "valore", Description: "Importo (1000-8000)", Required: true, MinValue: &[]float64{1000}[0], MaxValue: 8000},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "motivo", Description: "Motivo", Required: true},
-			},
-		},
-		// NUOVI COMANDI VILLE E AZIENDE
-		{Name: "villa-gestione", Description: "Gestione permessi villa"},
-		{Name: "villa-allarme", Description: "Attiva allarme villa"},
+		// Ville
+		{Name: "villa-gestione", Description: "Gestione permessi e stato della villa"},
+		{Name: "villa-keys", Description: "Consegna o ritira chiavi digitali", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Utente a cui dare/togliere chiavi", Required: true},
+		}},
+		{Name: "villa-allarme", Description: "Attiva sirena e avvisa lo staff"},
+		{Name: "villa-ospiti", Description: "Mostra lista persone autorizzate nella villa"},
+		{Name: "villa-sell", Description: "Avvia procedura vendita proprietà"},
+
+		// Aziende
+		{Name: "biz-info", Description: "Visualizza dipendenti e capitale sociale"},
+		{Name: "biz-assumi", Description: "Registra ufficialmente un nuovo lavoratore", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Nuovo dipendente", Required: true},
+		}},
+		{Name: "biz-paga", Description: "Invia stipendio o bonus produzione"},
+		{Name: "biz-turno", Description: "Segna l'entrata/uscita dal lavoro"},
+		{Name: "biz-annuncio", Description: "Invia notifica globale per l'azienda", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "messaggio", Description: "Testo dell'annuncio", Required: true},
+		}},
+
+		// Utility & Moderazione
 		{Name: "contratto", Description: "Genera contratto casa", Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionInteger, Name: "numero-casa", Description: "Civico", Required: true},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "tipo", Description: "Grandezza", Required: true, Choices: []*discordgo.ApplicationCommandOptionChoice{
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "numero-casa", Description: "Numero civico", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "tipo", Description: "Grandezza casa", Required: true, Choices: []*discordgo.ApplicationCommandOptionChoice{
 				{Name: "Normale", Value: "Normale"}, {Name: "Large", Value: "Large"}, {Name: "Extra Large", Value: "Extra Large"},
 			}},
 		}},
-		{Name: "setup-assistenza", Description: "Pannello Ticket Ville/Aziende"},
-		{Name: "regolamento", Description: "Mostra regolamento"},
-		{Name: "ban", Description: "Banna utente", Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Da bannare", Required: true},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "motivo", Description: "Motivo"},
+		{Name: "regolamento", Description: "Visualizza cosa c'è scritto nel regolamento"},
+		{Name: "setup-assistenza", Description: "Invia il pannello Ticket Ville/Aziende"},
+		{Name: "ban", Description: "Banna un utente", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Utente da bannare", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "motivo", Description: "Motivo del ban"},
+		}},
+		{Name: "kick", Description: "Espelli un utente", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionUser, Name: "utente", Description: "Utente da espellere", Required: true},
 		}},
 	}
 
@@ -71,65 +69,72 @@ func main() {
 			data := i.ApplicationCommandData()
 			switch data.Name {
 
-			// LOGICA FDO
-			case "chiama-fdo":
-				ruoloFDO := "1492918778885963836"
-				mappa := "ijisma95"
-				msg := fmt.Sprintf("<@&%s>\n🚨 **CHIAMATA FORZE DELL'ORDINE** 🚨\n\n👤 **Mittente:** <@%s>\n📍 **Cod Mappa EH:** `%s`\n⚠️ Intervento richiesto!", ruoloFDO, i.Member.User.ID, mappa)
-				s.ChannelMessageSend(i.ChannelID, msg)
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Inviata", Flags: 64}})
-
-			case "arresto":
-				res := fmt.Sprintf("⚖️ **ARRESTO**\nCivile: %s (%s)\nAgente: %s\nMotivo: %s\nVerbale: %s", data.Options[0].UserValue(s).Mention(), data.Options[1].StringValue(), data.Options[2].StringValue(), data.Options[3].StringValue(), data.Options[4].StringValue())
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: res}})
-
-			// LOGICA VILLE/AZIENDE
-			case "contratto":
-				res := fmt.Sprintf("📄 **CONTRATTO**\nCasa N: %d\nTipo: %s\nFirmato: %s", data.Options[0].IntValue(), data.Options[1].StringValue(), i.Member.User.Mention())
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: res}})
-
 			case "regolamento":
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: "📜 **Regolamento:** Cosa c'è scritto qui..."}})
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: 4,
+					Data: &discordgo.InteractionResponseData{Content: "📜 **REGOLAMENTO SERVER**\nIl regolamento prevede rispetto e gioco corretto. (Personalizza questo testo nel codice)"},
+				})
+
+			case "contratto":
+				num := data.Options[0].IntValue()
+				tipo := data.Options[1].StringValue()
+				res := fmt.Sprintf("📄 **CONTRATTO DI PROPRIETÀ**\n\n🏠 **Numero Casa:** %d\n📐 **Tipo:** %s\n👤 **Firmato da:** %s", num, tipo, i.Member.User.Mention())
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: res}})
 
 			case "setup-assistenza":
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: 4,
 					Data: &discordgo.InteractionResponseData{
-						Content: "🏢 **PANNELLO ASSET**",
+						Content: "🏢 **PANNELLO GESTIONE ASSET**\nSeleziona una categoria per aprire un ticket.",
 						Components: []discordgo.MessageComponent{
 							discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 								discordgo.SelectMenu{
 									CustomID: "ticket_asset",
+									Placeholder: "Scegli categoria...",
 									Options: []discordgo.SelectMenuOption{
-										{Label: "Acquisto Villa/Azienda", Value: "acquisto"},
-										{Label: "Gestione Ville/Aziende", Value: "gestione"},
+										{Label: "Acquisto Villa / Azienda", Value: "acquisto_asset"},
+										{Label: "Richiesta Gestione", Value: "gestione_asset"},
 									},
 								},
 							}},
 						},
 					},
 				})
+
+			case "ban":
+				target := data.Options[0].UserValue(s)
+				s.GuildBanCreate(i.GuildID, target.ID, 0)
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: "🔨 Utente " + target.Username + " bannato con successo."}})
 			}
 		}
 
-		// LOGICA TICKET ASSET (PING RUOLI 1495179869061906602 e 1495180574627860621)
+		// LOGICA TICKET CON PING RUOLI SPECIFICI
 		if i.Type == discordgo.InteractionMessageComponent && i.MessageComponentData().CustomID == "ticket_asset" {
 			cat := i.MessageComponentData().Values[0]
 			ch, _ := s.GuildChannelCreateComplex(i.GuildID, discordgo.GuildChannelCreateData{
-				Name: "asset-" + cat + "-" + i.Member.User.Username,
+				Name: "asset-" + i.Member.User.Username,
 				PermissionOverwrites: []*discordgo.PermissionOverwrite{
 					{ID: i.GuildID, Type: 0, Deny: 1024},
 					{ID: i.Member.User.ID, Type: 1, Allow: 3072},
 				},
 			})
-			s.ChannelMessageSend(ch.ID, fmt.Sprintf("🎫 **Ticket %s**\nUtente: %s\nPing: <@&1495179869061906602> <@&1495180574627860621>", cat, i.Member.User.Mention()))
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 4, Data: &discordgo.InteractionResponseData{Content: "✅ Aperto: <#"+ch.ID+">", Flags: 64}})
+			
+			// Messaggio interno al ticket con i tuoi ID Ruolo
+			pingMsg := fmt.Sprintf("🎫 **NUOVO TICKET ASSET**\nCategoria: %s\nUtente: %s\n\nAttenzione: <@&1495179869061906602> <@&1495180574627860621>", cat, i.Member.User.Mention())
+			s.ChannelMessageSend(ch.ID, pingMsg)
+			
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: 4,
+				Data: &discordgo.InteractionResponseData{Content: "✅ Ticket creato: <#"+ch.ID+">", Flags: 64},
+			})
 		}
 	})
 
 	s.Open()
 	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", commands)
+	fmt.Println("Bot Ville & Aziende Online! 🚀")
+	
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
 }
